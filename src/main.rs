@@ -1,4 +1,5 @@
 mod config;
+mod providers;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
