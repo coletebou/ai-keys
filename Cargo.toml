@@ -1,0 +1,27 @@
+[package]
+name = "ai-keys"
+version = "0.1.0"
+edition = "2021"
+description = "Manage API keys across AI providers from the terminal"
+authors = ["Cole Tebou"]
+license = "MIT"
+repository = "https://github.com/coletebou/ai-keys"
+readme = "README.md"
+keywords = ["api-keys", "ai", "cli", "openai", "anthropic"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "ai-keys"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+tokio = { version = "1", features = ["full"] }
+colored = "2"
+dirs = "5"
+anyhow = "1"
+async-trait = "0.1"
