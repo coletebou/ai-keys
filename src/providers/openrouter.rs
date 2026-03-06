@@ -32,14 +32,12 @@ struct ApiKey {
 
 #[derive(Debug, Deserialize)]
 struct CreateResponse {
-    data: CreatedApiKey,
+    data: CreatedApiKeyData,
+    key: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct CreatedApiKey {
-    #[allow(dead_code)]
-    hash: String,
-    key: String,
+struct CreatedApiKeyData {
     name: Option<String>,
 }
 
@@ -193,7 +191,7 @@ impl KeyProvider for OpenRouterProvider {
 
         Ok(CreatedKey {
             name: created.data.name.unwrap_or_else(|| name.to_string()),
-            key: created.data.key,
+            key: created.key,
             details,
         })
     }
