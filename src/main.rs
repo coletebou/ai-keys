@@ -1,5 +1,9 @@
+mod config;
+
 use clap::{Parser, Subcommand};
 use colored::Colorize;
+
+use config::Config;
 
 #[derive(Parser)]
 #[command(
@@ -95,28 +99,41 @@ async fn main() -> anyhow::Result<()> {
         None => {
             print_status_dashboard();
         }
-        Some(Command::List { provider }) => {
-            match provider {
-                Some(p) => println!("Listing keys for provider: {}", p.bold()),
-                None => println!("Listing keys for all providers..."),
-            }
-            println!("{}", "(not yet implemented)".dimmed());
-        }
-        Some(Command::Create { provider, name, .. }) => {
-            println!("Creating key '{}' for provider: {}", name.bold(), provider.bold());
-            println!("{}", "(not yet implemented)".dimmed());
-        }
-        Some(Command::Revoke { provider, id }) => {
-            println!("Revoking key '{}' for provider: {}", id.bold(), provider.bold());
-            println!("{}", "(not yet implemented)".dimmed());
-        }
-        Some(Command::Sync) => {
-            println!("Syncing key metadata across providers...");
-            println!("{}", "(not yet implemented)".dimmed());
-        }
         Some(Command::Init) => {
-            println!("Initializing ai-keys configuration...");
-            println!("{}", "(not yet implemented)".dimmed());
+            Config::init()?;
+        }
+        Some(command) => {
+            let _config = Config::load()?;
+            match command {
+                Command::List { provider } => {
+                    match provider {
+                        Some(p) => println!("Listing keys for provider: {}", p.bold()),
+                        None => println!("Listing keys for all providers..."),
+                    }
+                    println!("{}", "(not yet implemented)".dimmed());
+                }
+                Command::Create { provider, name, .. } => {
+                    println!(
+                        "Creating key '{}' for provider: {}",
+                        name.bold(),
+                        provider.bold()
+                    );
+                    println!("{}", "(not yet implemented)".dimmed());
+                }
+                Command::Revoke { provider, id } => {
+                    println!(
+                        "Revoking key '{}' for provider: {}",
+                        id.bold(),
+                        provider.bold()
+                    );
+                    println!("{}", "(not yet implemented)".dimmed());
+                }
+                Command::Sync => {
+                    println!("Syncing key metadata across providers...");
+                    println!("{}", "(not yet implemented)".dimmed());
+                }
+                Command::Init => unreachable!(),
+            }
         }
     }
 
