@@ -71,9 +71,27 @@ impl Ledger {
 /// Generate an env var name from provider + key name.
 /// E.g., "openrouter" + "badclaw-cole" = "OPENROUTER_BADCLAW_COLE"
 pub fn make_env_var(provider: &str, name: &str) -> String {
-    format!("{}_{}", provider, name)
-        .to_uppercase()
-        .replace('-', "_")
+    let raw = format!("{}_{}", provider, name).to_uppercase();
+    // Replace any non-alphanumeric character with underscore, collapse runs
+    let sanitized: String = raw
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    // Collapse consecutive underscores
+    let mut result = String::with_capacity(sanitized.len());
+    let mut prev_underscore = false;
+    for c in sanitized.chars() {
+        if c == '_' {
+            if !prev_underscore {
+                result.push(c);
+            }
+            prev_underscore = true;
+        } else {
+            result.push(c);
+            prev_underscore = false;
+        }
+    }
+    result.trim_end_matches('_').to_string()
 }
 
 /// Sync all ledger keys to configured remote machines via SSH.
@@ -213,6 +231,8 @@ mod tests {
         assert_eq!(make_env_var("openrouter", "badclaw-cole"), "OPENROUTER_BADCLAW_COLE");
         assert_eq!(make_env_var("openai", "my-key"), "OPENAI_MY_KEY");
         assert_eq!(make_env_var("xai", "test"), "XAI_TEST");
+        assert_eq!(make_env_var("xai", "Brett Imagine API"), "XAI_BRETT_IMAGINE_API");
+        assert_eq!(make_env_var("openai", "key--with---dashes"), "OPENAI_KEY_WITH_DASHES");
     }
 
     #[test]

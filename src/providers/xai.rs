@@ -107,8 +107,18 @@ impl KeyProvider for XaiProvider {
         Ok(keys)
     }
 
-    async fn create(&self, name: &str, _opts: &CreateOpts) -> Result<CreatedKey> {
-        let body = serde_json::json!({ "name": name });
+    async fn create(&self, name: &str, opts: &CreateOpts) -> Result<CreatedKey> {
+        let acls = opts.acl.as_deref().map(|a| {
+            a.split(',').map(|s| s.trim().to_string()).collect::<Vec<_>>()
+        }).unwrap_or_else(|| vec![
+            "api-key:model:*".to_string(),
+            "api-key:endpoint:*".to_string(),
+        ]);
+
+        let body = serde_json::json!({
+            "name": name,
+            "acls": acls,
+        });
 
         let resp = self
             .client
