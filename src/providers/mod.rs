@@ -1,4 +1,8 @@
+pub mod anthropic;
+pub mod google;
+pub mod openai;
 pub mod openrouter;
+pub mod xai;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -71,8 +75,41 @@ pub fn get_provider(name: &str, config: &Config) -> Result<Box<dyn KeyProvider>>
             })?;
             Ok(Box::new(openrouter::OpenRouterProvider::new(key)))
         }
-        "openai" | "xai" | "google" | "anthropic" => {
-            bail!("provider '{}' is not yet implemented", name)
+        "openai" => {
+            let key = mgmt_key.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "no management key found for openai. Set the OPENAI_ADMIN_KEY env var."
+                )
+            })?;
+            Ok(Box::new(openai::OpenAiProvider::new(key)))
+        }
+        "xai" => {
+            let key = mgmt_key.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "no management key found for xai. Set the XAI_MGMT_KEY env var."
+                )
+            })?;
+            let team_id = config
+                .providers
+                .get("xai")
+                .and_then(|p| p.team_id.clone())
+                .unwrap_or_else(|| "default".to_string());
+            Ok(Box::new(xai::XaiProvider::new(key, team_id)))
+        }
+        "anthropic" => {
+            let key = mgmt_key.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "no management key found for anthropic. Set the ANTHROPIC_ADMIN_KEY env var."
+                )
+            })?;
+            Ok(Box::new(anthropic::AnthropicProvider::new(key)))
+        }
+        "google" => {
+            let project_id = config
+                .providers
+                .get("google")
+                .and_then(|p| p.project_id.clone());
+            Ok(Box::new(google::GoogleProvider::new(project_id)))
         }
         _ => bail!("unknown provider: {}", name),
     }
