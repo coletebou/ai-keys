@@ -1,10 +1,29 @@
 mod config;
+mod display;
 mod providers;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 
 use config::Config;
+use providers::{get_provider, CreateOpts};
+
+const PROVIDER_NAMES: &[&str] = &["openrouter", "openai", "xai", "google", "anthropic"];
+
+const CONSOLE_URLS: &[(&str, &str)] = &[
+    ("openai", "https://platform.openai.com/api-keys"),
+    ("xai", "https://console.x.ai/team/default/api-keys"),
+    ("google", "https://console.cloud.google.com/apis/credentials"),
+    ("anthropic", "https://console.anthropic.com/settings/keys"),
+];
+
+fn console_url(provider: &str) -> &'static str {
+    CONSOLE_URLS
+        .iter()
+        .find(|(name, _)| *name == provider)
+        .map(|(_, url)| *url)
+        .unwrap_or("https://example.com")
+}
 
 #[derive(Parser)]
 #[command(
@@ -71,25 +90,32 @@ enum Command {
     Init,
 }
 
-fn print_status_dashboard() {
-    println!("{}", "ai-keys status dashboard".bold());
-    println!();
-    println!(
-        "{}",
-        "No configuration found. Run `ai-keys init` to get started.".dimmed()
-    );
-    println!();
-    println!("{}", "Supported providers:".bold());
-    println!("  {} OpenRouter", "●".green());
-    println!("  {} OpenAI", "●".green());
-    println!("  {} xAI", "●".green());
-    println!("  {} Google", "●".green());
-    println!("  {} Anthropic", "●".green());
-    println!();
-    println!(
-        "Run {} for usage information.",
-        "ai-keys --help".cyan()
-    );
+async fn run_dashboard(config: &Config) {
+    let mut statuses: Vec<(String, bool, Option<usize>, bool)> = Vec::new();
+
+    for &name in PROVIDER_NAMES {
+        let has_key = config
+            .get_management_key(name)
+            .ok()
+            .flatten()
+            .is_some();
+
+        let (count, supports_create) = if has_key {
+            match get_provider(name, config) {
+                Ok(provider) => {
+                    let count = provider.list().await.ok().map(|keys| keys.len());
+                    (count, provider.supports_create())
+                }
+                Err(_) => (None, false),
+            }
+        } else {
+            (None, false)
+        };
+
+        statuses.push((name.to_string(), has_key, count, supports_create));
+    }
+
+    display::print_status_dashboard(&statuses);
 }
 
 #[tokio::main]
@@ -98,36 +124,72 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         None => {
-            print_status_dashboard();
+            let config = Config::load()?;
+            run_dashboard(&config).await;
         }
         Some(Command::Init) => {
             Config::init()?;
         }
         Some(command) => {
-            let _config = Config::load()?;
+            let config = Config::load()?;
             match command {
                 Command::List { provider } => {
-                    match provider {
-                        Some(p) => println!("Listing keys for provider: {}", p.bold()),
-                        None => println!("Listing keys for all providers..."),
+                    let names: Vec<&str> = match &provider {
+                        Some(p) => vec![p.as_str()],
+                        None => PROVIDER_NAMES.to_vec(),
+                    };
+
+                    for name in names {
+                        match get_provider(name, &config) {
+                            Ok(p) => match p.list().await {
+                                Ok(keys) => display::print_key_list(name, &keys),
+                                Err(e) => eprintln!(
+                                    "{} {}: {}",
+                                    "\u{2717}".red(),
+                                    name,
+                                    format!("{:#}", e).red()
+                                ),
+                            },
+                            Err(e) => eprintln!(
+                                "{} {}: {}",
+                                "\u{2717}".red(),
+                                name,
+                                format!("{:#}", e).dimmed()
+                            ),
+                        }
                     }
-                    println!("{}", "(not yet implemented)".dimmed());
                 }
-                Command::Create { provider, name, .. } => {
-                    println!(
-                        "Creating key '{}' for provider: {}",
-                        name.bold(),
-                        provider.bold()
-                    );
-                    println!("{}", "(not yet implemented)".dimmed());
+                Command::Create {
+                    provider,
+                    name,
+                    limit,
+                    reset,
+                    project,
+                    acl,
+                    restrict_api,
+                } => {
+                    let p = get_provider(&provider, &config)?;
+
+                    if !p.supports_create() {
+                        display::print_create_unsupported(&provider, console_url(&provider));
+                        return Ok(());
+                    }
+
+                    let opts = CreateOpts {
+                        limit,
+                        reset,
+                        project,
+                        acl,
+                        restrict_api,
+                    };
+
+                    let created = p.create(&name, &opts).await?;
+                    display::print_created_key(&provider, &created);
                 }
                 Command::Revoke { provider, id } => {
-                    println!(
-                        "Revoking key '{}' for provider: {}",
-                        id.bold(),
-                        provider.bold()
-                    );
-                    println!("{}", "(not yet implemented)".dimmed());
+                    let p = get_provider(&provider, &config)?;
+                    p.revoke(&id).await?;
+                    display::print_revoked(&provider, &id);
                 }
                 Command::Sync => {
                     println!("Syncing key metadata across providers...");
