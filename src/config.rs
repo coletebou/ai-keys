@@ -144,12 +144,31 @@ impl Config {
         let config = Config::default();
         config.save()?;
 
-        println!("Created config at: {}", path.display());
+        println!("Created config: {}", path.display());
         println!();
-        println!("Next steps:");
-        println!("  1. Edit the config to add your management keys as env vars");
-        println!("  2. Export those env vars in your shell (e.g. in ~/.env_secrets)");
-        println!("  3. Run `ai-keys list` to verify connectivity");
+        println!("Set your management keys:");
+        println!(
+            "  {}    # {}",
+            "export OPENROUTER_MGMT_KEY=\"your-key-here\"",
+            "https://openrouter.ai/settings/management-keys"
+        );
+        println!(
+            "  {}       # {}",
+            "export OPENAI_ADMIN_KEY=\"your-key-here\"",
+            "https://platform.openai.com/settings/organization/admin-keys"
+        );
+        println!(
+            "  {}         # {}",
+            "export XAI_MGMT_KEY=\"your-key-here\"",
+            "https://console.x.ai/team/default/management-keys"
+        );
+        println!(
+            "  {}   # {}",
+            "export ANTHROPIC_ADMIN_KEY=\"your-key-here\"",
+            "https://console.anthropic.com/settings/admin-keys"
+        );
+        println!();
+        println!("Google uses `gcloud` CLI auth \u{2014} run `gcloud auth login`.");
 
         Ok(())
     }
