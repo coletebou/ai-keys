@@ -1,12 +1,14 @@
 mod config;
 mod display;
 mod providers;
+mod sync;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 
 use config::Config;
 use providers::{get_provider, CreateOpts};
+use sync::{make_env_var, Ledger};
 
 const PROVIDER_NAMES: &[&str] = &["openrouter", "openai", "xai", "google", "anthropic"];
 
@@ -83,7 +85,7 @@ enum Command {
         id: String,
     },
 
-    /// Sync key metadata across providers
+    /// Distribute API keys to remote machines via SSH
     Sync,
 
     /// Initialize configuration file
@@ -185,6 +187,18 @@ async fn main() -> anyhow::Result<()> {
 
                     let created = p.create(&name, &opts).await?;
                     display::print_created_key(&provider, &created);
+
+                    let env_var = make_env_var(&provider, &name);
+                    let mut ledger = Ledger::load()?;
+                    ledger.add_key(&provider, &name, &env_var, &created.key);
+                    ledger.save()?;
+                    println!(
+                        "  {} Key saved to ledger as {}. Run {} to distribute.",
+                        "\u{2713}".green(),
+                        env_var.bold(),
+                        "`ai-keys sync`".cyan()
+                    );
+                    println!();
                 }
                 Command::Revoke { provider, id } => {
                     let p = get_provider(&provider, &config)?;
@@ -192,8 +206,7 @@ async fn main() -> anyhow::Result<()> {
                     display::print_revoked(&provider, &id);
                 }
                 Command::Sync => {
-                    println!("Syncing key metadata across providers...");
-                    println!("{}", "(not yet implemented)".dimmed());
+                    sync::sync_keys(&config).await?;
                 }
                 Command::Init => unreachable!(),
             }
