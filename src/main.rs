@@ -55,6 +55,12 @@ enum Command {
         /// Name for the new key
         name: String,
 
+        /// Record an externally-minted key value instead of calling the provider API.
+        /// Required for providers like Anthropic where the Admin API cannot create keys.
+        /// When set, --limit/--reset/--project/--acl/--restrict-api are ignored.
+        #[arg(long)]
+        value: Option<String>,
+
         /// Usage limit in USD (provider-specific)
         #[arg(long)]
         limit: Option<f64>,
@@ -164,12 +170,35 @@ async fn main() -> anyhow::Result<()> {
                 Command::Create {
                     provider,
                     name,
+                    value,
                     limit,
                     reset,
                     project,
                     acl,
                     restrict_api,
                 } => {
+                    let env_var = make_env_var(&provider, &name);
+
+                    // Externally-minted key path: skip provider API, write straight to ledger.
+                    // This is the only viable path for providers without programmatic create
+                    // (e.g. Anthropic Admin API is list/revoke only).
+                    if let Some(val) = value {
+                        let mut ledger = Ledger::load()?;
+                        ledger.add_key(&provider, &name, &env_var, &val);
+                        ledger.save()?;
+                        println!();
+                        println!(
+                            "  {} Recorded {} ({}) to ledger as {}. Run {} to distribute.",
+                            "\u{2713}".green(),
+                            name.bold(),
+                            provider,
+                            env_var.bold(),
+                            "`ai-keys sync`".cyan()
+                        );
+                        println!();
+                        return Ok(());
+                    }
+
                     let p = get_provider(&provider, &config)?;
 
                     if !p.supports_create() {
@@ -188,7 +217,6 @@ async fn main() -> anyhow::Result<()> {
                     let created = p.create(&name, &opts).await?;
                     display::print_created_key(&provider, &created);
 
-                    let env_var = make_env_var(&provider, &name);
                     let mut ledger = Ledger::load()?;
                     ledger.add_key(&provider, &name, &env_var, &created.key);
                     ledger.save()?;

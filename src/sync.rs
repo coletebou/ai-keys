@@ -95,6 +95,12 @@ pub fn make_env_var(provider: &str, name: &str) -> String {
 }
 
 /// Sync all ledger keys to configured remote machines via SSH.
+///
+/// For each machine, runs up to two write paths:
+/// - **env file** (legacy): a single shell-source file with `export NAME="value"` lines.
+///   Skipped when `secrets_file` is empty.
+/// - **per-key files** (modern): one file per key, mode 0400, suitable for systemd
+///   `LoadCredential=` or Docker Compose `secrets:`. Skipped when `secrets_dir` is unset.
 pub async fn sync_keys(config: &Config) -> Result<()> {
     let ledger = Ledger::load()?;
     let keys = ledger.get_keys();
@@ -122,31 +128,64 @@ pub async fn sync_keys(config: &Config) -> Result<()> {
     println!();
 
     for (machine_name, machine_config) in &config.machines {
-        match sync_to_machine(&machine_config.host, &machine_config.secrets_file, keys) {
-            Ok(count) => {
-                println!(
-                    "  {} {}: {} keys synced",
-                    "\u{2713}".green(),
-                    machine_name.bold(),
-                    count
-                );
-            }
-            Err(e) => {
-                println!(
-                    "  {} {}: SSH failed: {}",
-                    "\u{2717}".red(),
-                    machine_name.bold(),
-                    format!("{:#}", e).red()
-                );
+        let env_result = if !machine_config.secrets_file.is_empty() {
+            Some(sync_envfile_to_machine(
+                &machine_config.host,
+                &machine_config.secrets_file,
+                keys,
+            ))
+        } else {
+            None
+        };
+
+        let dir_result = machine_config
+            .secrets_dir
+            .as_ref()
+            .map(|dir| sync_perkey_files_to_machine(&machine_config.host, dir, keys));
+
+        let mut summary: Vec<String> = Vec::new();
+        let mut had_error = false;
+
+        if let Some(r) = env_result {
+            match r {
+                Ok(n) => summary.push(format!("{} env keys", n)),
+                Err(e) => {
+                    summary.push(format!("env file failed: {:#}", e).red().to_string());
+                    had_error = true;
+                }
             }
         }
+        if let Some(r) = dir_result {
+            match r {
+                Ok(n) => summary.push(format!("{} per-key files", n)),
+                Err(e) => {
+                    summary.push(format!("per-key files failed: {:#}", e).red().to_string());
+                    had_error = true;
+                }
+            }
+        }
+        if summary.is_empty() {
+            summary.push("nothing to do (no secrets_file or secrets_dir)".to_string());
+        }
+
+        let mark = if had_error {
+            "\u{2717}".red()
+        } else {
+            "\u{2713}".green()
+        };
+        println!(
+            "  {} {}: {}",
+            mark,
+            machine_name.bold(),
+            summary.join(", ")
+        );
     }
 
     println!();
     Ok(())
 }
 
-fn sync_to_machine(host: &str, secrets_file: &str, keys: &[LedgerEntry]) -> Result<usize> {
+fn sync_envfile_to_machine(host: &str, secrets_file: &str, keys: &[LedgerEntry]) -> Result<usize> {
     // Read the remote secrets file (ok if it doesn't exist)
     let output = Command::new("ssh")
         .args([host, &format!("cat {} 2>/dev/null", secrets_file)])
@@ -222,6 +261,96 @@ fn sync_to_machine(host: &str, secrets_file: &str, keys: &[LedgerEntry]) -> Resu
     Ok(synced)
 }
 
+/// POSIX shell escape for command arguments. Wraps in single quotes when needed.
+/// Safe characters pass through unquoted.
+fn shell_escape(s: &str) -> String {
+    if !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || "/_.-~=:".contains(c))
+    {
+        s.to_string()
+    } else {
+        format!("'{}'", s.replace('\'', "'\\''"))
+    }
+}
+
+/// Build the path `<dir>/<filename>`, handling the trailing-slash case.
+fn join_remote_path(dir: &str, filename: &str) -> String {
+    if dir.ends_with('/') {
+        format!("{}{}", dir, filename)
+    } else {
+        format!("{}/{}", dir, filename)
+    }
+}
+
+/// Write each ledger key as an individual file under `dir` on the remote host.
+///
+/// Each file is created via tmp-write + chmod 0400 + atomic rename, all in a single
+/// SSH invocation per key. The directory is created with mode 0700 if it doesn't exist.
+/// File ownership matches the SSH login user (root for badclaw); LoadCredential and
+/// Compose secrets both consume root-owned 0400 files cleanly.
+fn sync_perkey_files_to_machine(
+    host: &str,
+    dir: &str,
+    keys: &[LedgerEntry],
+) -> Result<usize> {
+    let dir_q = shell_escape(dir);
+    let mkdir_cmd = format!(
+        "umask 077 && mkdir -p {dir} && chmod 0700 {dir}",
+        dir = dir_q,
+    );
+
+    let output = Command::new("ssh")
+        .args([host, &mkdir_cmd])
+        .output()
+        .with_context(|| format!("ssh mkdir on {}", host))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("mkdir failed on {}: {}", host, stderr.trim());
+    }
+
+    let mut written = 0;
+    for key in keys {
+        write_perkey_file(host, dir, &key.env_var, &key.value)
+            .with_context(|| format!("writing key {}", key.env_var))?;
+        written += 1;
+    }
+    Ok(written)
+}
+
+fn write_perkey_file(host: &str, dir: &str, env_var: &str, value: &str) -> Result<()> {
+    let target = join_remote_path(dir, env_var);
+    let tmp = join_remote_path(dir, &format!(".tmp.{}", env_var));
+
+    let cmd = format!(
+        "umask 077 && cat > {tmp} && chmod 0400 {tmp} && mv {tmp} {target}",
+        tmp = shell_escape(&tmp),
+        target = shell_escape(&target),
+    );
+
+    let mut child = Command::new("ssh")
+        .args([host, &cmd])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .with_context(|| format!("spawning ssh to {}", host))?;
+
+    use std::io::Write;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(value.as_bytes())
+            .context("writing key value to ssh stdin")?;
+    }
+
+    let result = child.wait_with_output().context("waiting for ssh")?;
+    if !result.status.success() {
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        anyhow::bail!("write failed: {}", stderr.trim());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -256,5 +385,34 @@ mod tests {
 
         assert_eq!(parsed.keys.len(), 1);
         assert_eq!(parsed.keys[0].value, "sk-abc");
+    }
+
+    #[test]
+    fn test_shell_escape_safe_chars_passthrough() {
+        // Plain paths and env var names need no escaping.
+        assert_eq!(shell_escape("/opt/badclaw/secrets/credstore"), "/opt/badclaw/secrets/credstore");
+        assert_eq!(shell_escape("ANTHROPIC_KELLEN_GURU"), "ANTHROPIC_KELLEN_GURU");
+        assert_eq!(shell_escape("foo.bar-baz_qux"), "foo.bar-baz_qux");
+    }
+
+    #[test]
+    fn test_shell_escape_quotes_unsafe_chars() {
+        // Spaces, $, and other special chars trigger quoting.
+        assert_eq!(shell_escape("with space"), "'with space'");
+        assert_eq!(shell_escape("$EVIL"), "'$EVIL'");
+        assert_eq!(shell_escape(""), "''");
+    }
+
+    #[test]
+    fn test_shell_escape_handles_embedded_single_quotes() {
+        // Single quotes inside a single-quoted string need '\'' decomposition.
+        assert_eq!(shell_escape("it's"), "'it'\\''s'");
+    }
+
+    #[test]
+    fn test_join_remote_path() {
+        assert_eq!(join_remote_path("/etc/secrets", "FOO"), "/etc/secrets/FOO");
+        assert_eq!(join_remote_path("/etc/secrets/", "FOO"), "/etc/secrets/FOO");
+        assert_eq!(join_remote_path("/", "FOO"), "/FOO");
     }
 }

@@ -22,8 +22,18 @@ pub struct ProviderConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MachineConfig {
     pub host: String,
+
+    /// Shell-source file (legacy). Each key written as `export NAME="value"`.
+    /// Set to empty string to skip — useful when migrating to per-key files.
     #[serde(default = "default_secrets_file")]
     pub secrets_file: String,
+
+    /// Per-key file directory (modern). Each key written as a single file
+    /// at `<secrets_dir>/<ENV_VAR>` with mode 0400, suitable for systemd
+    /// `LoadCredential=` and Docker Compose `secrets:` consumption.
+    /// The directory is created with mode 0700 if it doesn't exist.
+    #[serde(default)]
+    pub secrets_dir: Option<String>,
 }
 
 fn default_secrets_file() -> String {
