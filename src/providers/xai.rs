@@ -66,15 +66,13 @@ impl XaiProvider {
 }
 
 fn extract_date(datetime: &Option<String>) -> Option<String> {
-    datetime.as_ref().and_then(|dt| dt.get(..10).map(|s| s.to_string()))
+    datetime
+        .as_ref()
+        .and_then(|dt| dt.get(..10).map(|s| s.to_string()))
 }
 
 #[async_trait]
 impl KeyProvider for XaiProvider {
-    fn name(&self) -> &str {
-        "xai"
-    }
-
     fn supports_create(&self) -> bool {
         true
     }
@@ -82,7 +80,7 @@ impl KeyProvider for XaiProvider {
     async fn list(&self) -> Result<Vec<KeyInfo>> {
         let resp = self
             .client
-            .get(&self.team_url())
+            .get(self.team_url())
             .header("Authorization", self.auth_header())
             .send()
             .await
@@ -108,12 +106,20 @@ impl KeyProvider for XaiProvider {
     }
 
     async fn create(&self, name: &str, opts: &CreateOpts) -> Result<CreatedKey> {
-        let acls = opts.acl.as_deref().map(|a| {
-            a.split(',').map(|s| s.trim().to_string()).collect::<Vec<_>>()
-        }).unwrap_or_else(|| vec![
-            "api-key:model:*".to_string(),
-            "api-key:endpoint:*".to_string(),
-        ]);
+        let acls = opts
+            .acl
+            .as_deref()
+            .map(|a| {
+                a.split(',')
+                    .map(|s| s.trim().to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|| {
+                vec![
+                    "api-key:model:*".to_string(),
+                    "api-key:endpoint:*".to_string(),
+                ]
+            });
 
         let body = serde_json::json!({
             "name": name,
@@ -122,7 +128,7 @@ impl KeyProvider for XaiProvider {
 
         let resp = self
             .client
-            .post(&self.team_url())
+            .post(self.team_url())
             .header("Authorization", self.auth_header())
             .json(&body)
             .send()

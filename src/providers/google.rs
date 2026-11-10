@@ -44,9 +44,7 @@ impl GoogleProvider {
             cmd.arg(format!("--project={}", project));
         }
 
-        let output = cmd
-            .output()
-            .context("failed to run gcloud command")?;
+        let output = cmd.output().context("failed to run gcloud command")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -65,10 +63,6 @@ fn extract_date(datetime: &Option<String>) -> Option<String> {
 
 #[async_trait]
 impl KeyProvider for GoogleProvider {
-    fn name(&self) -> &str {
-        "google"
-    }
-
     fn supports_create(&self) -> bool {
         true
     }

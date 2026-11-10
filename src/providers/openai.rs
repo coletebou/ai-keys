@@ -63,7 +63,11 @@ impl OpenAiProvider {
         format!("Bearer {}", self.admin_key)
     }
 
-    async fn check_error(&self, response: reqwest::Response, label: &str) -> Result<reqwest::Response> {
+    async fn check_error(
+        &self,
+        response: reqwest::Response,
+        label: &str,
+    ) -> Result<reqwest::Response> {
         let status = response.status();
         if status.is_success() {
             return Ok(response);
@@ -84,12 +88,18 @@ impl OpenAiProvider {
             .context("failed to reach OpenAI API")?;
 
         let resp = self.check_error(resp, "list projects").await?;
-        let body: ProjectList = resp.json().await.context("failed to parse OpenAI project list")?;
+        let body: ProjectList = resp
+            .json()
+            .await
+            .context("failed to parse OpenAI project list")?;
         Ok(body.data)
     }
 
     async fn list_service_accounts(&self, project_id: &str) -> Result<Vec<ServiceAccount>> {
-        let url = format!("{}/projects/{}/service_accounts?limit=100", BASE_URL, project_id);
+        let url = format!(
+            "{}/projects/{}/service_accounts?limit=100",
+            BASE_URL, project_id
+        );
         let resp = self
             .client
             .get(&url)
@@ -121,10 +131,6 @@ fn format_timestamp(ts: Option<u64>) -> Option<String> {
 
 #[async_trait]
 impl KeyProvider for OpenAiProvider {
-    fn name(&self) -> &str {
-        "openai"
-    }
-
     fn supports_create(&self) -> bool {
         true
     }
@@ -198,7 +204,10 @@ impl KeyProvider for OpenAiProvider {
     async fn revoke(&self, key_id: &str) -> Result<()> {
         let parts: Vec<&str> = key_id.splitn(2, '/').collect();
         if parts.len() != 2 {
-            bail!("invalid key ID format: expected 'project_id/sa_id', got '{}'", key_id);
+            bail!(
+                "invalid key ID format: expected 'project_id/sa_id', got '{}'",
+                key_id
+            );
         }
         let (project_id, sa_id) = (parts[0], parts[1]);
 

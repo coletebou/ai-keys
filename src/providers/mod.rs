@@ -56,7 +56,6 @@ pub struct CreatedKey {
 
 #[async_trait]
 pub trait KeyProvider: Send + Sync {
-    fn name(&self) -> &str;
     fn supports_create(&self) -> bool;
     async fn list(&self) -> Result<Vec<KeyInfo>>;
     async fn create(&self, name: &str, opts: &CreateOpts) -> Result<CreatedKey>;
@@ -85,9 +84,7 @@ pub fn get_provider(name: &str, config: &Config) -> Result<Box<dyn KeyProvider>>
         }
         "xai" => {
             let key = mgmt_key.ok_or_else(|| {
-                anyhow::anyhow!(
-                    "no management key found for xai. Set the XAI_MGMT_KEY env var."
-                )
+                anyhow::anyhow!("no management key found for xai. Set the XAI_MGMT_KEY env var.")
             })?;
             let team_id = config
                 .providers
