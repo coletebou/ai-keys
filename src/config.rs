@@ -121,8 +121,7 @@ impl Config {
             fs::create_dir_all(parent)
                 .with_context(|| format!("creating directory {}", parent.display()))?;
         }
-        let content =
-            toml::to_string_pretty(self).context("serializing config to TOML")?;
+        let content = toml::to_string_pretty(self).context("serializing config to TOML")?;
         fs::write(&path, content).with_context(|| format!("writing {}", path.display()))?;
         Ok(())
     }
@@ -157,26 +156,10 @@ impl Config {
         println!("Created config: {}", path.display());
         println!();
         println!("Set your management keys:");
-        println!(
-            "  {}    # {}",
-            "export OPENROUTER_MGMT_KEY=\"your-key-here\"",
-            "https://openrouter.ai/settings/management-keys"
-        );
-        println!(
-            "  {}       # {}",
-            "export OPENAI_ADMIN_KEY=\"your-key-here\"",
-            "https://platform.openai.com/settings/organization/admin-keys"
-        );
-        println!(
-            "  {}         # {}",
-            "export XAI_MGMT_KEY=\"your-key-here\"",
-            "https://console.x.ai/team/default/management-keys"
-        );
-        println!(
-            "  {}   # {}",
-            "export ANTHROPIC_ADMIN_KEY=\"your-key-here\"",
-            "https://console.anthropic.com/settings/admin-keys"
-        );
+        println!("  export OPENROUTER_MGMT_KEY=\"your-key-here\"    # https://openrouter.ai/settings/management-keys");
+        println!("  export OPENAI_ADMIN_KEY=\"your-key-here\"       # https://platform.openai.com/settings/organization/admin-keys");
+        println!("  export XAI_MGMT_KEY=\"your-key-here\"         # https://console.x.ai/team/default/management-keys");
+        println!("  export ANTHROPIC_ADMIN_KEY=\"your-key-here\"   # https://console.anthropic.com/settings/admin-keys");
         println!();
         println!("Google uses `gcloud` CLI auth \u{2014} run `gcloud auth login`.");
 

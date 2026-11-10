@@ -24,7 +24,6 @@ struct ApiKey {
     label: Option<String>,
     disabled: bool,
     limit: Option<f64>,
-    limit_remaining: Option<f64>,
     usage: Option<f64>,
     created_at: Option<String>,
     limit_reset: Option<String>,
@@ -100,17 +99,13 @@ fn format_usage(usage: Option<f64>) -> Option<String> {
 }
 
 fn extract_date(datetime: &Option<String>) -> Option<String> {
-    datetime.as_ref().and_then(|dt| {
-        dt.get(..10).map(|s| s.to_string())
-    })
+    datetime
+        .as_ref()
+        .and_then(|dt| dt.get(..10).map(|s| s.to_string()))
 }
 
 #[async_trait]
 impl KeyProvider for OpenRouterProvider {
-    fn name(&self) -> &str {
-        "openrouter"
-    }
-
     fn supports_create(&self) -> bool {
         true
     }
@@ -186,7 +181,10 @@ impl KeyProvider for OpenRouterProvider {
         let mut details = Vec::new();
         if let Some(limit) = opts.limit {
             let reset_label = opts.reset.as_deref().unwrap_or("no reset");
-            details.push(("Limit".to_string(), format!("${:.2}/{}", limit, reset_label)));
+            details.push((
+                "Limit".to_string(),
+                format!("${:.2}/{}", limit, reset_label),
+            ));
         }
 
         Ok(CreatedKey {

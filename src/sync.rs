@@ -173,12 +173,7 @@ pub async fn sync_keys(config: &Config) -> Result<()> {
         } else {
             "\u{2713}".green()
         };
-        println!(
-            "  {} {}: {}",
-            mark,
-            machine_name.bold(),
-            summary.join(", ")
-        );
+        println!("  {} {}: {}", mark, machine_name.bold(), summary.join(", "));
     }
 
     println!();
@@ -289,11 +284,7 @@ fn join_remote_path(dir: &str, filename: &str) -> String {
 /// SSH invocation per key. The directory is created with mode 0700 if it doesn't exist.
 /// File ownership matches the SSH login user (root for badclaw); LoadCredential and
 /// Compose secrets both consume root-owned 0400 files cleanly.
-fn sync_perkey_files_to_machine(
-    host: &str,
-    dir: &str,
-    keys: &[LedgerEntry],
-) -> Result<usize> {
+fn sync_perkey_files_to_machine(host: &str, dir: &str, keys: &[LedgerEntry]) -> Result<usize> {
     let dir_q = shell_escape(dir);
     let mkdir_cmd = format!(
         "umask 077 && mkdir -p {dir} && chmod 0700 {dir}",
@@ -357,11 +348,20 @@ mod tests {
 
     #[test]
     fn test_make_env_var() {
-        assert_eq!(make_env_var("openrouter", "badclaw-cole"), "OPENROUTER_BADCLAW_COLE");
+        assert_eq!(
+            make_env_var("openrouter", "badclaw-cole"),
+            "OPENROUTER_BADCLAW_COLE"
+        );
         assert_eq!(make_env_var("openai", "my-key"), "OPENAI_MY_KEY");
         assert_eq!(make_env_var("xai", "test"), "XAI_TEST");
-        assert_eq!(make_env_var("xai", "Brett Imagine API"), "XAI_BRETT_IMAGINE_API");
-        assert_eq!(make_env_var("openai", "key--with---dashes"), "OPENAI_KEY_WITH_DASHES");
+        assert_eq!(
+            make_env_var("xai", "Brett Imagine API"),
+            "XAI_BRETT_IMAGINE_API"
+        );
+        assert_eq!(
+            make_env_var("openai", "key--with---dashes"),
+            "OPENAI_KEY_WITH_DASHES"
+        );
     }
 
     #[test]
@@ -390,8 +390,14 @@ mod tests {
     #[test]
     fn test_shell_escape_safe_chars_passthrough() {
         // Plain paths and env var names need no escaping.
-        assert_eq!(shell_escape("/opt/badclaw/secrets/credstore"), "/opt/badclaw/secrets/credstore");
-        assert_eq!(shell_escape("ANTHROPIC_KELLEN_GURU"), "ANTHROPIC_KELLEN_GURU");
+        assert_eq!(
+            shell_escape("/opt/badclaw/secrets/credstore"),
+            "/opt/badclaw/secrets/credstore"
+        );
+        assert_eq!(
+            shell_escape("ANTHROPIC_KELLEN_GURU"),
+            "ANTHROPIC_KELLEN_GURU"
+        );
         assert_eq!(shell_escape("foo.bar-baz_qux"), "foo.bar-baz_qux");
     }
 

@@ -15,7 +15,10 @@ const PROVIDER_NAMES: &[&str] = &["openrouter", "openai", "xai", "google", "anth
 const CONSOLE_URLS: &[(&str, &str)] = &[
     ("openai", "https://platform.openai.com/api-keys"),
     ("xai", "https://console.x.ai/team/default/api-keys"),
-    ("google", "https://console.cloud.google.com/apis/credentials"),
+    (
+        "google",
+        "https://console.cloud.google.com/apis/credentials",
+    ),
     ("anthropic", "https://console.anthropic.com/settings/keys"),
 ];
 
@@ -102,11 +105,7 @@ async fn run_dashboard(config: &Config) {
     let mut statuses: Vec<(String, bool, Option<usize>, bool)> = Vec::new();
 
     for &name in PROVIDER_NAMES {
-        let has_key = config
-            .get_management_key(name)
-            .ok()
-            .flatten()
-            .is_some();
+        let has_key = config.get_management_key(name).ok().flatten().is_some();
 
         let (count, supports_create) = if has_key {
             match get_provider(name, config) {

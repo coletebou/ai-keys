@@ -45,7 +45,9 @@ impl AnthropicProvider {
 }
 
 fn extract_date(datetime: &Option<String>) -> Option<String> {
-    datetime.as_ref().and_then(|dt| dt.get(..10).map(|s| s.to_string()))
+    datetime
+        .as_ref()
+        .and_then(|dt| dt.get(..10).map(|s| s.to_string()))
 }
 
 fn parse_status(status: &str) -> KeyStatus {
@@ -58,10 +60,6 @@ fn parse_status(status: &str) -> KeyStatus {
 
 #[async_trait]
 impl KeyProvider for AnthropicProvider {
-    fn name(&self) -> &str {
-        "anthropic"
-    }
-
     fn supports_create(&self) -> bool {
         false
     }
